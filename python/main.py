@@ -72,7 +72,7 @@ def main():
                 print("Command failed. Abort.")
                 return
             print("Command finished successfully.")
-    ser.write(b"M 0 0")   # Move back to home
+    ser.write(b"M 0 0\n")   # Move back to home
     ser.close()
 
 if __name__ == "__main__":

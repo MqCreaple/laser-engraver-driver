@@ -36,7 +36,7 @@ void convertDeltaPosition(float *params) {
   float curX = getCurX();
   float curY = getCurY();
   params[0] += curX;
-  params[0] += curY;
+  params[1] += curY;
 }
 
 float lastStartX = -1.0;
