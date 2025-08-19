@@ -5,9 +5,10 @@ import re
 import string
 
 def preprocess(path: str) -> list[str]:
-    supported_commands = re.compile(r"[MmLHhVvCcSsZz]")
+    supported_commands = re.compile(r"[MmLHhVvCcSsQqTtZz]")
     for c in string.ascii_letters:
         path = path.replace(c, "\n" + c + " ")   # Isolate every command into a new line
+    path = path.replace(",", " ")
     whitespace = re.compile(r"[^\S\r\n]+")
     path = whitespace.sub(" ", path)                  # replace multiple whitespace with one
     commands = list(
@@ -38,7 +39,18 @@ def main():
         print("Homing failed. Abort.")
         return
     
-    print("Homing completed. Press ENTER when you're ready to draw.")
+    print("Homing completed")
+
+    line = input("Please type a scaling factor (default: 1.0): ")
+    scale = 1.0
+    try:
+        scale = float(line)
+    except:
+        scale = 1.0
+    ser.write(f"scale {scale}\n".encode("utf-8"))
+    print("Set scaling factor to ", scale)
+
+    print("Press ENTER when you're ready to draw.")
     input()
     print("Start drawing the path.")
 

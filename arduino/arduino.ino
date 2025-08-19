@@ -21,6 +21,14 @@ float *parseParams(const String &command, int index, int &paramCnt) {
   return params;
 }
 
+// This is for easy scaling of SVG images
+float scaleFactor = 1.0;
+void scaleParams(float *params, int n) {
+  for(int i = 0; i < n; i++) {
+    params[i] *= scaleFactor;
+  }
+}
+
 // change params[0] and params[1] to the relative position from the current position.
 //
 // This is useful when using the lowercase commands in SVG, such as `m dx dy`.
@@ -47,6 +55,7 @@ void executeCommand(const String &command) {
   if(op == "M" || op == "m") {
     // move to position
     CHECKPARAM(paramCnt, 2);
+    scaleParams(params, 2);
     if(op == "m") {
       convertDeltaPosition(params);
     }
@@ -55,10 +64,12 @@ void executeCommand(const String &command) {
     lastStartY = params[1];
   } else if(op == "L") {
     // draw line path from the current position
+    scaleParams(params, paramCnt);
     drawPath(params, paramCnt / 2);
   } else if(op == "H" || op == "h") {
     // draw horizontal line
     CHECKPARAM(paramCnt, 1);
+    scaleParams(params, 1);
     float y = getCurY();
     float x = params[0];
     if(op == "h") {
@@ -70,6 +81,7 @@ void executeCommand(const String &command) {
   } else if(op == "V" || op == "v") {
     // draw vertical line
     CHECKPARAM(paramCnt, 1);
+    scaleParams(params, 1);
     float x = getCurX();
     float y = params[0];
     if(op == "v") {
@@ -86,8 +98,9 @@ void executeCommand(const String &command) {
     }
     stopLaser();
   } else if(op == "C" || op == "c") {
-    // draw Bezier curve
+    // draw cubic Bezier curve
     CHECKPARAM(paramCnt, 6);
+    scaleParams(params, 6);
     if(op == "c") {
       convertDeltaPosition(params);
       convertDeltaPosition(params + 2);
@@ -100,6 +113,7 @@ void executeCommand(const String &command) {
     lastBezierCY = params[3];
   } else if(op == "S" || op == "s") {
     CHECKPARAM(paramCnt, 4);
+    scaleParams(params, 4);
     if(op == "s") {
       convertDeltaPosition(params);
       convertDeltaPosition(params + 2);
@@ -112,15 +126,44 @@ void executeCommand(const String &command) {
     lastBezierY = params[3];
     lastBezierCX = params[0];
     lastBezierCY = params[1];
+  } else if(op == "Q" || op == "q") {
+    // draw quadratic Bezier curve
+    CHECKPARAM(paramCnt, 4);
+    scaleParams(params, 4);
+    if(op == "q") {
+      convertDeltaPosition(params);
+      convertDeltaPosition(params + 2);
+    }
+    drawBezier2(params[0], params[1], params[2], params[3]);
+    lastBezierX = params[2];
+    lastBezierY = params[3];
+    lastBezierCX = params[0];
+    lastBezierCY = params[1];
+  } else if(op == "T" || op == "t") {
+    CHECKPARAM(paramCnt, 2);
+    scaleParams(params, 2);
+    if(op == "t") {
+      convertDeltaPosition(params);
+    }
+    float nextCX = lastBezierX * 2 - lastBezierCX;
+    float nextCY = lastBezierY * 2 - lastBezierCY;
+    moveToMillimeter(lastBezierX, lastBezierY);
+    drawBezier2(nextCX, nextCY, params[0], params[1]);
+    lastBezierX = params[0];
+    lastBezierY = params[1];
+    lastBezierCX = nextCX;
+    lastBezierCY = nextCY;
   } else if(op == "arc") {
     // draw arc
     // TODO: incompatible with SVG format
     CHECKPARAM(paramCnt, 5);
+    scaleParams(params, 5);
     drawArc(params[0], params[1], params[2], params[3], params[4]);
   } else if(op == "circle") {
     // draw circle
     // TODO: incompatible with SVG format
     CHECKPARAM(paramCnt, 3);
+    scaleParams(params, 3);
     drawCircleMillimeter(params[0], params[1], params[2]);
   } else if(op == "dot") {
     // draw dot
@@ -129,6 +172,20 @@ void executeCommand(const String &command) {
     startLaser();
     delay(100);
     stopLaser();
+  } else if(op == "laser") {
+    // set the laser strength to the given value
+    // each draw command will reset the laser strength to either highest or lowest
+    CHECKPARAM(paramCnt, 1);
+    setLaserStrength(params[0]);
+  } else if(op == "scale") {
+    // set the overall scaling factor of the SVG image
+    CHECKPARAM(paramCnt, 1);
+    scaleFactor = params[0];
+  } else {
+    delete[] params;
+    Serial.print("Unrecognized command: ");
+    Serial.println(op);
+    return;
   }
   delete[] params;
   Serial.println("Finished command");

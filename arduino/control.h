@@ -7,10 +7,11 @@ const int STEPPER_X_DIR_PIN = 5;
 const int STEPPER_Y_STEP_PIN = 3;
 const int STEPPER_Y_DIR_PIN = 6;
 const int LASER_PIN = 11;
-const long STEPPER_MAX_SPEED = 1000;
+const long STEPPER_MAX_SPEED = 2000;
 const float STEPS_PER_MILLIMETER = 80.0; // 1 rotation = 40 mm = 200 steps * 16 (gearing)   -->   1 mm = 80 steps
 const int BAUD = 9600;
 const float ARC_RESOLUTION = 1;     // unit: mm
+const int MAX_DIVISION = 512;
 
 AccelStepper stepperX(AccelStepper::DRIVER, STEPPER_X_STEP_PIN, STEPPER_X_DIR_PIN);
 AccelStepper stepperY(AccelStepper::DRIVER, STEPPER_Y_STEP_PIN, STEPPER_Y_DIR_PIN);
@@ -19,6 +20,11 @@ void moveToStep(long, long);
 
 inline void startLaser() {
   digitalWrite(LASER_PIN, HIGH);
+}
+
+inline void setLaserStrength(float strength) {
+  strength = (strength >= 0) ? ((strength <= 1) ? strength : 1.0) : 0.0;
+  analogWrite(LASER_PIN, 255 * strength);
 }
 
 inline void stopLaser() {
@@ -104,22 +110,6 @@ void moveLineStep(long x, long y) {
   long curY = stepperY.currentPosition();
   long dx = x - curX;
   long dy = y - curY;
-  // float dist = hypot(dx, dy);
-  // float duration = dist / STEPPER_MAX_SPEED;  // unit: seconds
-  // float xSpeed = dx / duration;
-  // float ySpeed = dy / duration;
-  // long durationMillis = duration * 1000;  // unit: milliseconds
-
-  // stepperX.setSpeed(xSpeed);
-  // stepperY.setSpeed(ySpeed);
-  // unsigned long curTime = millis();
-  // while (millis() <= curTime + durationMillis) {
-  //   stepperX.runSpeed();
-  //   stepperY.runSpeed();
-  // }
-  // stepperX.stop();
-  // stepperY.stop();
-  // moveToStep(x, y);  // perform a final correction to ensure the step is accurate
 
   // use Bresenham's line drawing algorithm to draw the line
   digitalWrite(STEPPER_X_DIR_PIN, (dx >= 0) ? HIGH : LOW);
@@ -155,10 +145,10 @@ void moveLineStep(long x, long y) {
       tmp -= 1.0;
       curMinor += 1;
     }
-    delay(1);
+    delayMicroseconds(1000);
     digitalWrite(pinMajor, LOW);
     digitalWrite(pinMinor, LOW);
-    delay(1);
+    delayMicroseconds(1000);
   }
   stepperX.setCurrentPosition(x);
   stepperY.setCurrentPosition(y);
@@ -226,20 +216,20 @@ void drawCircleStep(long x, long y, float radius) {
       if(stepArray[i>>3] & (1 << (i&7))) {
         digitalWrite(secondPin, HIGH);
       }
-      delay(1);
+      delayMicroseconds(1000);
       digitalWrite(firstPin, LOW);
       digitalWrite(secondPin, LOW);
-      delay(1);
+      delayMicroseconds(1000);
     }
     for(int i = arraySize - 2 + spur; i >= 0; i--) {
       digitalWrite(secondPin, HIGH);
       if(stepArray[i>>3] & (1 << (i&7))) {
         digitalWrite(firstPin, HIGH);
       }
-      delay(1);
+      delayMicroseconds(1000);
       digitalWrite(secondPin, LOW);
       digitalWrite(firstPin, LOW);
-      delay(1);
+      delayMicroseconds(1000);
     }
   }
   stopLaser();
@@ -270,6 +260,7 @@ void drawPath(float path[], int n) {
 void drawArc(float x, float y, float radius, float startAngle, float endAngle) {
   float arcLen = abs(endAngle - startAngle) * radius;
   int divisions = ceil(arcLen / ARC_RESOLUTION);
+  divisions = min(divisions, MAX_DIVISION);
   Serial.print("Points on the arc: ");
   Serial.println(divisions);
   float angleStep = (endAngle - startAngle) / divisions;
@@ -293,6 +284,7 @@ void drawBezier(float xc1, float yc1, float xc2, float yc2, float x, float y) {
                          + hypot(xc2 - xc1, yc2 - yc1)
                          + hypot(x - xc2, y - yc2);
   int divisions = ceil(arcLenUpperBound / ARC_RESOLUTION);
+  divisions = min(divisions, MAX_DIVISION);
   float *points = new float[divisions * 2];
   for(int i = 0; i < divisions; i++) {
     float t = ((float) (i + 1)) / divisions;
@@ -309,6 +301,33 @@ void drawBezier(float xc1, float yc1, float xc2, float yc2, float x, float y) {
     float yu2 = t1 * yt2 + t * yt3;
     points[i * 2] = t1 * xu1 + t * xu2;
     points[i * 2 + 1] = t1 * yu1 + t * yu2;
+    // Serial.print(points[i * 2]);
+    // Serial.print(", ");
+    // Serial.println(points[i * 2 + 1]);
+  }
+  drawPath(points, divisions);
+  delete[] points;
+}
+
+// Draw a quadratic Bezier curve starting at the current point with one control point
+// (xc, yc).
+void drawBezier2(float xc, float yc, float x, float y) {
+  float curX = getCurX();
+  float curY = getCurY();
+  float arcLenUpperBound = hypot(xc - curX, yc - curY)
+                         + hypot(x - xc, y - yc);
+  int divisions = ceil(arcLenUpperBound / ARC_RESOLUTION);
+  divisions = min(divisions, MAX_DIVISION);
+  float *points = new float[divisions * 2];
+  for(int i = 0; i < divisions; i++) {
+    float t = ((float) (i + 1)) / divisions;
+    float t1 = 1 - t;
+    float xt1 = t1 * curX + t * xc;
+    float yt1 = t1 * curY + t * yc;
+    float xt2 = t1 * xc + t * x;
+    float yt2 = t1 * yc + t * y;
+    points[i * 2] = t1 * xt1 + t * xt2;
+    points[i * 2 + 1] = t1 * yt1 + t * yt2;
     // Serial.print(points[i * 2]);
     // Serial.print(", ");
     // Serial.println(points[i * 2 + 1]);
