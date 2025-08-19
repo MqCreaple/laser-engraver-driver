@@ -5,7 +5,7 @@ import re
 import string
 
 def preprocess(path: str) -> list[str]:
-    supported_commands = re.compile(r"[MmLHhVvCcZz]")
+    supported_commands = re.compile(r"[MmLHhVvCcSsZz]")
     for c in string.ascii_letters:
         path = path.replace(c, "\n" + c + " ")   # Isolate every command into a new line
     whitespace = re.compile(r"[^\S\r\n]+")

@@ -1,5 +1,7 @@
 #include "control.h"
 
+#define CHECKPARAM(paramCnt, n) if(paramCnt != n) { Serial.println("Incorrect number of parameters. Abort."); return; }
+
 float *parseParams(const String &command, int index, int &paramCnt) {
   float *params = new float[128];
   int lastIndex = index;
@@ -44,10 +46,7 @@ void executeCommand(const String &command) {
   float *params = parseParams(command, index, paramCnt);
   if(op == "M" || op == "m") {
     // move to position
-    if(paramCnt != 2) {
-      Serial.println("Incorrect number of parameters. Abort.");
-      return;
-    }
+    CHECKPARAM(paramCnt, 2);
     if(op == "m") {
       convertDeltaPosition(params);
     }
@@ -59,6 +58,7 @@ void executeCommand(const String &command) {
     drawPath(params, paramCnt / 2);
   } else if(op == "H" || op == "h") {
     // draw horizontal line
+    CHECKPARAM(paramCnt, 1);
     float y = getCurY();
     float x = params[0];
     if(op == "h") {
@@ -69,6 +69,7 @@ void executeCommand(const String &command) {
     stopLaser();
   } else if(op == "V" || op == "v") {
     // draw vertical line
+    CHECKPARAM(paramCnt, 1);
     float x = getCurX();
     float y = params[0];
     if(op == "v") {
@@ -78,6 +79,7 @@ void executeCommand(const String &command) {
     moveLineMillimeter(x, y);
     stopLaser();
   } else if(op == "Z" || op == "z") {
+    CHECKPARAM(paramCnt, 0);
     startLaser();
     if(lastStartX != -1 && lastStartY != -1) {
       moveLineMillimeter(lastStartX, lastStartY);
@@ -85,35 +87,45 @@ void executeCommand(const String &command) {
     stopLaser();
   } else if(op == "C" || op == "c") {
     // draw Bezier curve
-    if(paramCnt != 6) {
-      Serial.println("Incorrect number of parameters. Abort.");
-      return;
-    }
+    CHECKPARAM(paramCnt, 6);
     if(op == "c") {
       convertDeltaPosition(params);
       convertDeltaPosition(params + 2);
       convertDeltaPosition(params + 4);
     }
     drawBezier(params[0], params[1], params[2], params[3], params[4], params[5]);
+    lastBezierX = params[4];
+    lastBezierY = params[5];
+    lastBezierCX = params[2];
+    lastBezierCY = params[3];
+  } else if(op == "S" || op == "s") {
+    CHECKPARAM(paramCnt, 4);
+    if(op == "s") {
+      convertDeltaPosition(params);
+      convertDeltaPosition(params + 2);
+    }
+    float nextCX = lastBezierX * 2 - lastBezierCX;
+    float nextCY = lastBezierY * 2 - lastBezierCY;
+    moveToMillimeter(lastBezierX, lastBezierY);
+    drawBezier(nextCX, nextCY, params[0], params[1], params[2], params[3]);
+    lastBezierX = params[2];
+    lastBezierY = params[3];
+    lastBezierCX = params[0];
+    lastBezierCY = params[1];
   } else if(op == "arc") {
     // draw arc
     // TODO: incompatible with SVG format
-    if(paramCnt != 5) {
-      Serial.println("Incorrect number of parameters. Abort.");
-      return;
-    }
+    CHECKPARAM(paramCnt, 5);
     drawArc(params[0], params[1], params[2], params[3], params[4]);
   } else if(op == "circle") {
     // draw circle
     // TODO: incompatible with SVG format
-    if(paramCnt != 3) {
-      Serial.println("Incorrect number of parameters. Abort.");
-      return;
-    }
+    CHECKPARAM(paramCnt, 3);
     drawCircleMillimeter(params[0], params[1], params[2]);
   } else if(op == "dot") {
     // draw dot
     // TODO: incompatible with SVG format
+    CHECKPARAM(paramCnt, 0);
     startLaser();
     delay(100);
     stopLaser();
